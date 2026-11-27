@@ -245,7 +245,21 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
 .a-agenda { --c1: #5b9bff; --c2: #2459d6; --c: #2f6fdb; } .a-compra { --c1: #3fd69a; --c2: #0d8a5d; --c: #12a06a; } .a-menu { --c1: #ff86ad; --c2: #d13d76; --c: #d9487a; } .a-fotos { --c1: #ad8dff; --c2: #6740d6; --c: #7556d1; } .a-inicio { --c: var(--fg); }
 .home-today { margin-top: 22px; }
 .app .txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.apps .app:last-child:nth-child(odd) { grid-column: 1 / -1; flex-direction: row; align-items: center; }
+.apps .app.wide { grid-column: 1 / -1; flex-direction: row; align-items: center; }
+.a-avui { --c1: #ffd25e; --c2: #f08a24; --c: #d9761a; }
+.avui-date { color: var(--muted); margin: 2px 0 6px; }
+.avui-date::first-letter { text-transform: uppercase; }
+.avui-block { margin-top: 20px; }
+.avui-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.avui-head .tile { width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(145deg, var(--c1), var(--c2)); color: #fff; display: grid; place-items: center; flex: none; }
+.avui-head .tile svg { width: 18px; height: 18px; }
+.avui-head h2 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; flex: 1; }
+.avui-head .more { background: none; border: 0; color: var(--muted); font: inherit; font-size: .85rem; cursor: pointer; padding: 6px 2px; }
+.avui-empty { color: var(--muted); font-size: .92rem; padding: 4px 2px; }
+.avui-meals { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; margin: 0; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.avui-meals dt { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; padding-top: 2px; }
+.avui-meals dd { margin: 0; overflow-wrap: anywhere; }
+.avui-store { color: var(--muted); font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin: 10px 2px 6px; }
 .a-feines { --c1: #ffb54d; --c2: #e06a12; --c: #d9761a; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) nav.bottom .a-agenda { --c: #6ea3f2; } :root:not([data-theme="light"]) nav.bottom .a-compra { --c: #4fc795; } :root:not([data-theme="light"]) nav.bottom .a-menu { --c: #ef7fa7; } :root:not([data-theme="light"]) nav.bottom .a-fotos { --c: #a690ee; } :root:not([data-theme="light"]) nav.bottom .a-feines { --c: #f0a04b; } }
 :root[data-theme="dark"] nav.bottom .a-agenda { --c: #6ea3f2; } :root[data-theme="dark"] nav.bottom .a-compra { --c: #4fc795; } :root[data-theme="dark"] nav.bottom .a-menu { --c: #ef7fa7; } :root[data-theme="dark"] nav.bottom .a-fotos { --c: #a690ee; } :root[data-theme="dark"] nav.bottom .a-feines { --c: #f0a04b; }
@@ -330,14 +344,14 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
 <input type="file" id="photoInput" accept="image/*" multiple class="vh" tabindex="-1" aria-hidden="true">
 <div class="viewer" id="viewer" hidden></div>
 
-<script>window.XF_CONFIG = {"version": "4", "clientId": "81552258273-rj053ci47avd7a8j75hl3uogbg711184.apps.googleusercontent.com", "folderId": "1bnokMvQ8ofoV3mgSsR-StzbCubecYl00", "sheetTitle": "Xavier's family \u00b7 dades", "sheetId": "1kmVDrEAd_LtLubBjFgcpcUkGYVKVdy-bkknkYEmCuJU"};</script>
-<script src="shim.js?v=4"></script>
+<script>window.XF_CONFIG = {"version": "5", "clientId": "81552258273-rj053ci47avd7a8j75hl3uogbg711184.apps.googleusercontent.com", "folderId": "1bnokMvQ8ofoV3mgSsR-StzbCubecYl00", "sheetTitle": "Xavier's family \u00b7 dades", "sheetId": "1kmVDrEAd_LtLubBjFgcpcUkGYVKVdy-bkknkYEmCuJU"};</script>
+<script src="shim.js?v=5"></script>
 <script>
 (function () {
   "use strict";
   const PEOPLE = ["papa", "mama", "juntos", "xavier"];
   const DEFAULT_NAMES = { papa: "Papa", mama: "Mama", juntos: "Junts", xavier: "Xavier" };
-  const SECTIONS = ["inicio", "agenda", "feines", "compra", "menu", "fotos"];
+  const SECTIONS = ["inicio", "avui", "agenda", "feines", "compra", "menu", "fotos"];
   const AG_VIEWS = ["agenda", "mes"];
   const DAYS = [["lunes", "Dilluns"], ["martes", "Dimarts"], ["miercoles", "Dimecres"], ["jueves", "Dijous"], ["viernes", "Divendres"], ["sabado", "Dissabte"], ["domingo", "Diumenge"]];
   const MEALS = [["comida", "Dinar"], ["cena", "Sopar"]];
@@ -430,7 +444,7 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
     }
     const fab = $("#addBtn");
     const labels = { inicio: "", agenda: "Afegir", feines: "Afegir feina", compra: "Afegir", menu: "Editar el menú", fotos: "Pujar fotos" };
-    fab.hidden = !state.canWrite || state.section === "inicio" || state.section === "menu" || !state.db || state.section === "fotos";
+    fab.hidden = !state.canWrite || state.section === "inicio" || state.section === "avui" || state.section === "menu" || !state.db || state.section === "fotos";
     $("#addLabel").textContent = labels[state.section];
   }
 
@@ -744,6 +758,7 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
   // ---------- Inicio ----------
   const SVG0 = '<svg viewBox="0 0 24 24" aria-hidden="true">';
   const ICONS = {
+    avui: SVG0 + '<circle cx="12" cy="12" r="9" fill="currentColor" opacity=".4"/><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path d="M12 1.8v2.4M12 19.8v2.4M1.8 12h2.4M19.8 12h2.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
     inicio: SVG0 + '<rect x="3" y="3" width="8" height="8" rx="2.6" fill="currentColor"/><rect x="13" y="3" width="8" height="8" rx="2.6" fill="currentColor" opacity=".4"/><rect x="3" y="13" width="8" height="8" rx="2.6" fill="currentColor" opacity=".4"/><rect x="13" y="13" width="8" height="8" rx="2.6" fill="currentColor"/></svg>',
     agenda: SVG0 + '<rect x="3" y="5" width="18" height="16" rx="4.5" fill="currentColor" opacity=".4"/><path d="M3 9.5A4.5 4.5 0 0 1 7.5 5h9A4.5 4.5 0 0 1 21 9.5V10H3z" fill="currentColor"/><rect x="6.8" y="2.5" width="2.4" height="5" rx="1.2" fill="currentColor"/><rect x="14.8" y="2.5" width="2.4" height="5" rx="1.2" fill="currentColor"/><rect x="6.5" y="13" width="4" height="4" rx="1.3" fill="currentColor"/></svg>',
     feines: SVG0 + '<rect x="3" y="3" width="18" height="18" rx="5.5" fill="currentColor" opacity=".4"/><path d="M6.8 9.3l1.7 1.7 3-3.2M6.8 15.3l1.7 1.7 3-3.2" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/><rect x="13" y="8.4" width="5" height="2.2" rx="1.1" fill="currentColor"/><rect x="13" y="14.4" width="5" height="2.2" rx="1.1" fill="currentColor"/></svg>',
@@ -775,33 +790,92 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
     if (!state.loaded.menu) menu = "Carregant…";
     const nf = photoList().length;
     const fotos = state.drive.status === "ok" ? (nf ? nf + (nf === 1 ? " foto" : " fotos") : "Encara no hi ha fotos") : (state.drive.status === "loading" ? "Carregant…" : "Obre per connectar");
-    return { agenda, feines, compra, menu, fotos };
+    return { avui: avuiSub(), agenda, feines, compra, menu, fotos };
   }
   function renderHome(main) {
     const h = new Date().getHours();
     main.append(el("div", { class: "home-hello", text: h < 13 ? "Bon dia" : h < 20 ? "Bona tarda" : "Bona nit" }));
     const subs = homeSubs();
     const apps = el("div", { class: "apps" });
-    [["agenda", "Agenda"], ["feines", "Feines"], ["compra", "A comprar"], ["menu", "Menú setmanal"], ["fotos", "Fotos del " + state.names.xavier]].forEach(([k, label]) => {
+    [["avui", "Resum del dia"], ["agenda", "Agenda"], ["feines", "Feines"], ["compra", "A comprar"], ["menu", "Menú setmanal"], ["fotos", "Fotos del " + state.names.xavier]].forEach(([k, label]) => {
       const tile = el("span", { class: "tile", "aria-hidden": "true" }); tile.innerHTML = ICONS[k];
-      apps.append(el("button", { type: "button", class: "app a-" + k, onclick: () => goSection(k) }, tile, el("span", { class: "txt" }, el("span", { class: "name", text: label }), k === "menu" ? null : el("span", { class: "sub", text: subs[k] }))));
+      apps.append(el("button", { type: "button", class: "app a-" + k + (k === "avui" || k === "fotos" ? " wide" : ""), onclick: () => goSection(k) }, tile, el("span", { class: "txt" }, el("span", { class: "name", text: label }), k === "menu" ? null : el("span", { class: "sub", text: subs[k] }))));
     });
     main.append(apps);
+  }
+  function avuiParts() {
     const t = todayStr();
-    const todayItems = state.entries.filter(e => e.date === t && (e.kind === "evento" || !e.done)).sort(byWhen);
-    if (todayItems.length) {
-      const sec = el("section", { class: "home-today" }, el("div", { class: "day-head is-today" }, el("h2", { text: "Avui" })));
-      const l = el("div", { class: "list" }); todayItems.forEach(e => l.append(itemNode(e))); sec.append(l); main.append(sec);
-    }
+    const events = state.entries.filter(e => e.date === t && e.kind === "evento").sort(byWhen);
+    const tasks = state.entries.filter(e => e.kind === "tarea" && ((!e.done && (!e.date || e.date <= t)) || (e.done && e.date === t))).sort((a, b) => (a.done - b.done) || byWhen(a, b));
+    const d = (state.menu && state.menu[todayKey()]) || {};
+    const shop = state.shop.filter(i => !i.done);
+    return { events, tasks, meals: d, shop };
+  }
+  function avuiSub() {
+    if (!state.loaded.entries || !state.loaded.shop || !state.loaded.menu) return "Carregant…";
+    const p = avuiParts(); const bits = [];
+    bits.push(p.events.length ? p.events.length + (p.events.length === 1 ? " cosa a l'agenda" : " coses a l'agenda") : "Agenda lliure");
+    const ot = p.tasks.filter(e => !e.done).length; if (ot) bits.push(ot + (ot === 1 ? " feina" : " feines"));
+    if (p.shop.length) bits.push(p.shop.length + " per comprar");
+    return bits.join(" · ");
+  }
+  function avuiHead(k, label, onMore) {
+    const tile = el("span", { class: "tile", "aria-hidden": "true" }); tile.innerHTML = ICONS[k];
+    return el("div", { class: "avui-head a-" + k }, tile, el("h2", { text: label }), onMore ? el("button", { type: "button", class: "more", onclick: onMore }, "Obre ›") : null);
+  }
+  function renderAvui(main) {
+    const p = avuiParts();
+    main.append(el("div", { class: "section-title", text: "Resum del dia" }));
+    // Agenda
+    let b = el("section", { class: "avui-block" }, avuiHead("agenda", "Agenda", () => goSection("agenda")));
+    if (p.events.length) { const l = el("div", { class: "list" }); p.events.forEach(e => l.append(itemNode(e))); b.append(l); }
+    else b.append(el("div", { class: "avui-empty", text: !state.loaded.cal ? "Carregant…" : state.cal.status !== "ok" ? "No s'ha pogut carregar el calendari." : "Avui no hi ha res a l'agenda." }));
+    main.append(b);
+    // Feines
+    b = el("section", { class: "avui-block" }, avuiHead("feines", "Feines", () => goSection("feines")));
+    if (p.tasks.length) { const l = el("div", { class: "list" }); p.tasks.forEach(e => l.append(itemNode(e))); b.append(l); }
+    else b.append(el("div", { class: "avui-empty", text: state.loaded.entries ? "Cap feina per avui." : "Carregant…" }));
+    main.append(b);
+    // Menú
+    b = el("section", { class: "avui-block" }, avuiHead("menu", "Menú d'avui", () => goSection("menu")));
+    const meals = MEALS.filter(([mk]) => p.meals[mk]);
+    if (meals.length) {
+      const dl = el("dl", { class: "avui-meals" });
+      for (const [mk, ml] of MEALS) dl.append(el("dt", { text: ml }), el("dd", { text: str(p.meals[mk], 300) || "—" }));
+      b.append(el("button", { type: "button", style: "display:block;width:100%;padding:0;border:0;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer", "aria-label": "Obre el menú setmanal", onclick: () => goSection("menu") }, dl));
+    } else b.append(el("div", { class: "avui-empty", text: state.loaded.menu ? "No hi ha menú per avui." : "Carregant…" }));
+    main.append(b);
+    // A comprar
+    b = el("section", { class: "avui-block" }, avuiHead("compra", "A comprar", () => goSection("compra")));
+    if (p.shop.length) {
+      const groups = new Map();
+      for (const it of p.shop) { const k = it.store ? storeKey(it.store) : ""; if (!groups.has(k)) groups.set(k, { label: it.store || "Sense supermercat", items: [] }); groups.get(k).items.push(it); }
+      const keys = [...groups.keys()].sort((a, c) => (a === "") - (c === "") || groups.get(a).label.localeCompare(groups.get(c).label, "ca"));
+      for (const k of keys) {
+        const g = groups.get(k);
+        if (keys.length > 1 || k) b.append(el("div", { class: "avui-store", text: g.label }));
+        const l = el("div", { class: "list" });
+        for (const it of g.items.sort((a, c) => a.createdAt - c.createdAt)) {
+          const q = fmtQty(it);
+          l.append(el("div", { class: "buy" },
+            el("button", { type: "button", class: "check", "aria-label": "Marca com a comprat", disabled: !state.canWrite, onclick: () => toggleDone("shopping", it) }, svgCheck()),
+            el("button", { type: "button", class: "item-open", "aria-label": "Edita " + it.name, onclick: () => openShopSheet(it) }, el("div", { class: "name", text: it.name })),
+            q ? el("span", { class: "qty", text: q }) : el("span")));
+        }
+        b.append(l);
+      }
+    } else b.append(el("div", { class: "avui-empty", text: state.loaded.shop ? "No cal comprar res." : "Carregant…" }));
+    main.append(b);
   }
 
   // ---------- Render general ----------
   function render() {
     renderChrome();
     const main = $("#main"); main.replaceChildren();
-    const key = { inicio: null, agenda: "cal", feines: "entries", compra: "shop", menu: "menu", fotos: null }[state.section];
+    const key = { inicio: null, avui: null, agenda: "cal", feines: "entries", compra: "shop", menu: "menu", fotos: null }[state.section];
     statusNotes(main, key);
     if (state.section === "inicio") renderHome(main);
+    else if (state.section === "avui") renderAvui(main);
     else if (state.section === "agenda") renderAgenda(main);
     else if (state.section === "feines") renderFeines(main);
     else if (state.section === "compra") renderShop(main);
