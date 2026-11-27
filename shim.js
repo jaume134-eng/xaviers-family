@@ -132,6 +132,7 @@
     if ("summary" in i) b.summary = i.summary;
     if ("description" in i) b.description = i.description;
     if (i.colorId) b.colorId = i.colorId;
+    if (Array.isArray(i.recurrenceData) && i.recurrenceData.length) b.recurrence = i.recurrenceData;
     if (i.startTime) {
       if (i.allDay) { b.start = { date: i.startTime.slice(0, 10) }; b.end = { date: (i.endTime || i.startTime).slice(0, 10) }; }
       else { b.start = { dateTime: i.startTime, timeZone: i.timeZone || "Europe/Madrid" }; b.end = { dateTime: i.endTime, timeZone: i.timeZone || "Europe/Madrid" }; }
