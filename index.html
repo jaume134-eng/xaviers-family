@@ -241,6 +241,10 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
 .meals dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
 .meal-day .empty { color: var(--muted); font-size: .9rem; }
 .menu-note { white-space: pre-wrap; overflow-wrap: anywhere; }
+.menu-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 20px 0 8px; }
+.menu-head .section-title { margin: 0; }
+.undo-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: #d9487a; font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; min-height: 40px; }
+.undo-btn:active { transform: scale(.96); }
 
 /* Inicio */
 .home-hello { margin: 14px 0 4px; font-family: var(--font-display); font-weight: 600; font-size: 1.15rem; }
@@ -357,8 +361,8 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
 <input type="file" id="photoInput" accept="image/*" multiple class="vh" tabindex="-1" aria-hidden="true">
 <div class="viewer" id="viewer" hidden></div>
 
-<script>window.XF_CONFIG = {"version": "8", "clientId": "81552258273-rj053ci47avd7a8j75hl3uogbg711184.apps.googleusercontent.com", "folderId": "1bnokMvQ8ofoV3mgSsR-StzbCubecYl00", "sheetTitle": "Xavier's family \u00b7 dades", "sheetId": "1kmVDrEAd_LtLubBjFgcpcUkGYVKVdy-bkknkYEmCuJU"};</script>
-<script src="shim.js?v=8"></script>
+<script>window.XF_CONFIG = {"version": "9", "clientId": "81552258273-rj053ci47avd7a8j75hl3uogbg711184.apps.googleusercontent.com", "folderId": "1bnokMvQ8ofoV3mgSsR-StzbCubecYl00", "sheetTitle": "Xavier's family \u00b7 dades", "sheetId": "1kmVDrEAd_LtLubBjFgcpcUkGYVKVdy-bkknkYEmCuJU"};</script>
+<script src="shim.js?v=9"></script>
 <script>
 (function () {
   "use strict";
@@ -695,7 +699,14 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
   function renderMenu(main) {
     const ok = state.loaded.menu && !state.error;
     const m = state.menu || {};
-    main.append(el("div", { class: "section-title", text: "Menú de la setmana" }));
+    const head = el("div", { class: "menu-head" }, el("div", { class: "section-title", text: "Menú de la setmana" }));
+    if (state.canWrite && menuUndo.length) {
+      const ub = el("button", { type: "button", class: "undo-btn", "aria-label": "Desfés l'últim canvi del menú", onclick: () => undoMenu() });
+      ub.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
+      ub.append(document.createTextNode("Desfés"));
+      head.append(ub);
+    }
+    main.append(head);
     if (state.canWrite) main.append(el("p", { class: "week-hint", text: picked ? "Ara toca l'àpat amb què el vols intercanviar." : "Arrossega un àpat pels puntets per canviar-lo de lloc. Toca'l per editar-lo o esborrar-lo." }));
     const any = DAYS.some(([k]) => m[k] && MEALS.some(([mk]) => m[k][mk]));
     if (!any && ok) main.append(el("div", { class: "notice" }, el("strong", { text: "Encara no hi ha menú." }), document.createTextNode(" Toca una casella per escriure-hi el dinar o el sopar, o passa'm el menú i el poso jo.")));
@@ -767,18 +778,34 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
     };
     grip.addEventListener("pointermove", move); grip.addEventListener("pointerup", end); grip.addEventListener("pointercancel", end);
   }
-  async function writeMenu(patch, okMsg) {
+  const menuUndo = [];
+  async function undoMenu() {
+    const u = menuUndo.pop(); if (!u) return;
+    const ok = await writeMenu(u.patch, "Desfet: " + u.label, true);
+    if (!ok) menuUndo.push(u);
+  }
+  async function writeMenu(patch, okMsg, isUndo) {
     const ref = state.db.doc("menu/semana");
     const before = state.menu;
+    if (!isUndo) {
+      const inv = {};
+      for (const k in patch) {
+        if (patch[k] && typeof patch[k] === "object") { inv[k] = {}; for (const mk in patch[k]) inv[k][mk] = mealText(k, mk); }
+        else inv[k] = before && k in before ? before[k] : "";
+      }
+      menuUndo.push({ patch: inv, label: (okMsg || "canvi").toLowerCase() });
+      if (menuUndo.length > 30) menuUndo.shift();
+    }
     const next = JSON.parse(JSON.stringify(state.menu || {}));
     for (const k in patch) { if (patch[k] && typeof patch[k] === "object") next[k] = { ...(next[k] || {}), ...patch[k] }; else next[k] = patch[k]; }
     state.menu = next; render();
     try {
-      if (before) await ref.update({ ...patch, updatedAt: Date.now() });
-      else await ref.set({ ...patch, updatedAt: Date.now() });
+      const full = {}; for (const k in patch) full[k] = next[k];
+      if (before) await ref.update({ ...full, updatedAt: Date.now() });
+      else await ref.set({ ...full, updatedAt: Date.now() });
       if (okMsg) toast(okMsg);
       return true;
-    } catch (e) { state.menu = before; render(); toast(errText(e)); return false; }
+    } catch (e) { if (!isUndo) menuUndo.pop(); state.menu = before; render(); toast(errText(e)); return false; }
   }
   function swapMeals(a, b) {
     const va = mealText(a.day, a.meal), vb = mealText(b.day, b.meal);
