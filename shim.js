@@ -174,6 +174,25 @@
   function b64ToBlob(b64, type) { const bin = atob(b64); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new Blob([a], { type }); }
   const driveTools = {
     async search_files(i) {
+      // L'API de Drive no accepta «'X' in ancestors»: es recorre carpeta per carpeta
+      const anc = /'([^']+)' in ancestors/.exec(i.query || "");
+      if (anc) {
+        const out = [], seen = new Set(), queue = [anc[1]];
+        while (queue.length && seen.size < 500) {
+          const ids = queue.splice(0, 20).filter(id => !seen.has(id)); ids.forEach(id => seen.add(id));
+          if (!ids.length) continue;
+          const sub = i.query.replace(anc[0], "(" + ids.map(id => "'" + id + "' in parents").join(" or ") + ")");
+          let token = "";
+          for (let n = 0; n < 30; n++) {
+            const q = new URLSearchParams({ q: sub, pageSize: "1000", fields: "nextPageToken,files(" + FIELDS + ")", supportsAllDrives: "true", includeItemsFromAllDrives: "true" });
+            if (token) q.set("pageToken", token);
+            const r = await gfetch(DRV + "?" + q);
+            for (const f of (r && r.files) || []) { out.push(fileOut(f)); if (f.mimeType === "application/vnd.google-apps.folder") queue.push(f.id); }
+            token = r && r.nextPageToken; if (!token) break;
+          }
+        }
+        return { payload: { files: out, nextPageToken: "" } };
+      }
       const q = new URLSearchParams({ q: i.query, pageSize: String(Math.min(1000, i.pageSize || 200)), fields: "nextPageToken,files(" + FIELDS + ")", supportsAllDrives: "true", includeItemsFromAllDrives: "true" });
       if (i.pageToken) q.set("pageToken", i.pageToken);
       const r = await gfetch(DRV + "?" + q);
