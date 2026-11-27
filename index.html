@@ -362,8 +362,8 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
 <input type="file" id="photoInput" accept="image/*" multiple class="vh" tabindex="-1" aria-hidden="true">
 <div class="viewer" id="viewer" hidden></div>
 
-<script>window.XF_CONFIG = {"version": "10", "clientId": "81552258273-rj053ci47avd7a8j75hl3uogbg711184.apps.googleusercontent.com", "folderId": "1bnokMvQ8ofoV3mgSsR-StzbCubecYl00", "sheetTitle": "Xavier's family \u00b7 dades", "sheetId": "1kmVDrEAd_LtLubBjFgcpcUkGYVKVdy-bkknkYEmCuJU"};</script>
-<script src="shim.js?v=10"></script>
+<script>window.XF_CONFIG = {"version": "11", "clientId": "81552258273-rj053ci47avd7a8j75hl3uogbg711184.apps.googleusercontent.com", "folderId": "1bnokMvQ8ofoV3mgSsR-StzbCubecYl00", "sheetTitle": "Xavier's family \u00b7 dades", "sheetId": "1kmVDrEAd_LtLubBjFgcpcUkGYVKVdy-bkknkYEmCuJU"};</script>
+<script src="shim.js?v=11"></script>
 <script>
 (function () {
   "use strict";
@@ -377,7 +377,7 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
   const UNIT_LABEL = { ud: "u.", g: "g", kg: "kg", ml: "ml", l: "l", paquete: "paquet", docena: "dotzena", lata: "llauna", bote: "pot" };
   const state = {
     db: null, canWrite: true, names: { ...DEFAULT_NAMES },
-    entries: [], tasks: [], events: [], extraEvents: {}, shop: [], menu: null,
+    entries: [], tasks: [], events: [], extraEvents: {}, shop: [], menus: {}, repoMenus: {}, menuWeek: null,
     cal: { status: "loading", code: "", msg: "" }, mcp: null,
     drive: { status: "loading", code: "" }, uploadError: "", driveFiles: [], driveFolders: {}, thumbs: {}, uploading: null,
     loaded: { entries: false, cal: false, shop: false, menu: false }, slow: false, error: null,
@@ -696,11 +696,28 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
   const SHORT_DAYS = ["Dl", "Dt", "Dc", "Dj", "Dv", "Ds", "Dg"];
   const GRIP_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><g fill="currentColor"><circle cx="5.5" cy="3.5" r="1.4"/><circle cx="10.5" cy="3.5" r="1.4"/><circle cx="5.5" cy="8" r="1.4"/><circle cx="10.5" cy="8" r="1.4"/><circle cx="5.5" cy="12.5" r="1.4"/><circle cx="10.5" cy="12.5" r="1.4"/></g></svg>';
   let picked = null, drag = null;
-  function mealText(day, meal) { const m = state.menu || {}; return m[day] && typeof m[day][meal] === "string" ? m[day][meal] : ""; }
+  function mondayOf(d) { return ymd(new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7))); }
+  function curWeek() { return mondayOf(new Date()); }
+  function viewWeek() { return state.menuWeek || curWeek(); }
+  const WK_RE = /^\d{4}-\d{2}-\d{2}$/;
+  function datedWeeks() { const s = new Set(); for (const k in state.menus) if (WK_RE.test(k)) s.add(k); for (const k in state.repoMenus) if (WK_RE.test(k)) s.add(k); return [...s].sort(); }
+  function menuFor(wk) {
+    if (state.menus[wk]) return { m: state.menus[wk], src: "own" };
+    if (state.repoMenus[wk]) return { m: state.repoMenus[wk], src: "repo" };
+    const prev = datedWeeks().filter(k => k < wk).pop();
+    if (prev) return { m: state.menus[prev] || state.repoMenus[prev], src: "carried", from: prev };
+    if (state.menus.semana) return { m: state.menus.semana, src: "semana" };
+    return { m: null, src: "none" };
+  }
+  function weekLabel(wk) {
+    const ws = parse(wk), end = new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + 6);
+    return ws.getMonth() === end.getMonth() ? ws.getDate() + " – " + fmtShort.format(end) : fmtShort.format(ws) + " – " + fmtShort.format(end);
+  }
+  function mealText(day, meal, m) { m = m || menuFor(viewWeek()).m || {}; return m[day] && typeof m[day][meal] === "string" ? m[day][meal] : ""; }
   function renderMenu(main) {
     const ok = state.loaded.menu && !state.error;
-    const m = state.menu || {};
-    const head = el("div", { class: "menu-head" }, el("div", { class: "section-title", text: "Menú de la setmana" }));
+    const wk = viewWeek(), info = menuFor(wk), m = info.m || {}, cw = curWeek();
+    const head = el("div", { class: "menu-head" }, el("div", { class: "section-title", text: wk === cw ? "Menú d'aquesta setmana" : wk === ymd(new Date(parse(cw).getTime() + 7 * 864e5 + 36e5)) ? "Menú de la setmana que ve" : "Menú setmanal" }));
     if (state.canWrite && menuUndo.length) {
       const ub = el("button", { type: "button", class: "undo-btn", "aria-label": "Desfés l'últim canvi del menú", onclick: () => undoMenu() });
       ub.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
@@ -708,12 +725,18 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
       head.append(ub);
     }
     main.append(head);
+    const moveWk = (n) => { const d = parse(wk); d.setDate(d.getDate() + n); state.menuWeek = ymd(d) === cw ? null : ymd(d); picked = null; render(); };
+    main.append(el("div", { class: "month-nav" },
+      el("button", { type: "button", class: "icon-btn", "aria-label": "Setmana anterior", onclick: () => moveWk(-7) }, "‹"),
+      el("div", { style: "display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center" }, el("h2", { text: weekLabel(wk) }), wk === cw ? null : el("button", { type: "button", class: "wk-today-btn", onclick: () => { state.menuWeek = null; picked = null; render(); } }, "Avui")),
+      el("button", { type: "button", class: "icon-btn", "aria-label": "Setmana següent", onclick: () => moveWk(7) }, "›")));
+    if (ok && (info.src === "carried" || (info.src === "semana" && wk > cw))) main.append(el("div", { class: "notice", style: "margin-bottom:10px" }, el("strong", { text: "Encara no hi ha menú nou per a aquesta setmana." }), document.createTextNode(" Es repeteix " + (info.from ? "el de la setmana del " + weekLabel(info.from) : "el d'aquesta setmana") + "; passa'm el nou i el poso jo, o canvia els plats tocant-los.")));
     if (state.canWrite) main.append(el("p", { class: "week-hint", text: picked ? "Ara toca l'àpat amb què el vols intercanviar." : "Arrossega un àpat pels puntets per canviar-lo de lloc. Toca'l per editar-lo o esborrar-lo." }));
     const any = DAYS.some(([k]) => m[k] && MEALS.some(([mk]) => m[k][mk]));
     if (!any && ok) main.append(el("div", { class: "notice" }, el("strong", { text: "Encara no hi ha menú." }), document.createTextNode(" Toca una casella per escriure-hi el dinar o el sopar, o passa'm el menú i el poso jo.")));
     const grid = el("div", { class: "week" });
     grid.append(el("span"), el("div", { class: "colh", text: "Dinar" }), el("div", { class: "colh", text: "Sopar" }));
-    const dates = weekDates(); const tk = todayKey();
+    const dates = DAYS.map((d, i) => { const x = parse(wk); x.setDate(x.getDate() + i); return x; }); const tk = wk === cw ? todayKey() : null;
     DAYS.forEach(([k, label], i) => {
       grid.append(el("div", { class: "wday" + (k === tk ? " today" : ""), "aria-label": label }, el("b", { text: SHORT_DAYS[i] }), el("span", { text: String(dates[i].getDate()) })));
       for (const [mk, ml] of MEALS) {
@@ -742,7 +765,8 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
     });
     main.append(grid);
     if (m.nota) main.append(el("div", { class: "notice menu-note", style: "margin-top:16px", text: m.nota }));
-    if (state.canWrite && ok && !menuIsOriginal()) main.append(el("button", { type: "button", class: "restore-btn", onclick: () => restoreMenu() }, "Torna al menú original de la Lida"));
+    const base = menuBase(wk);
+    if (state.canWrite && ok && base && !sameMenu(m, base.m)) main.append(el("button", { type: "button", class: "restore-btn", onclick: () => writeMenu(JSON.parse(JSON.stringify(base.m)), "Menú restaurat") }, base.label));
   }
   function startDrag(ev, day, meal, card, grip) {
     if (!state.canWrite || (ev.button !== undefined && ev.button !== 0)) return;
@@ -781,39 +805,56 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
     grip.addEventListener("pointermove", move); grip.addEventListener("pointerup", end); grip.addEventListener("pointercancel", end);
   }
   const ORIGINAL_MENU = {"domingo": {"cena": "2 ous amb tomàtiga i espinacs + 60 g de pa sense gluten", "comida": "Dinar lliure", "desayuno": "Tria una opció:\n1) Iogurt natural amb cereals de blat d'indi (30 g), plàtan, poma o kiwi i un poquet de mel\n2) Pa sense gluten (60 g) amb 1 ou i gall d'indi / pernil dolç, oli i sal (o versió dolça amb mantega i melmelada)\n+ cafè amb llet sense sucre o tallat", "media": "Sortida en bici? Menjar cada 45' i beure cada 20' (2 dàtils o orellanes, plàtan, o mitja llesca de pa sense gluten amb codonyat o melmelada)", "merienda": "1 ració de fruita"}, "jueves": {"cena": "Sortida en bici → llobina o orada al forn amb arròs blanc (50 g) i amanida de brots verds amb tomàtiga i envinagrats", "comida": "Crema de carabassa i formatge blau (Thermomix) + pit de pollastre (150 g) torrat", "desayuno": "Tria una opció:\n1) Llet semidesnatada o beguda vegetal (150 g) + flocs de blat d'indi sense sucre (30 g) + fruita trossejada (100 g) + 20 g de fruits secs torrats\n2) Iogurt natural o grec + flocs de blat d'indi (30 g) + fruits secs (20 g) + fruita\n3) Pa sense gluten (60 g) amb 1 ou i gall d'indi / pernil (>90% carn) / pernil salat / formatge fresc, tomàtiga, oli i sal\n4) Batut: 1 dosi de proteïna + 250 g de llet o beguda vegetal + 40 g de cereals + 100 g de fruita\n+ cafè amb llet sense sucre o tallat\n(Si entrenes en dejú, fes-lo després d'entrenar)", "media": "Tria una opció:\n1) 1 fruita amb 20 g de fruits secs (si tens gana, 2 tortites de blat d'indi, arròs o llegums)\n2) 1 ració de fruita amb iogurt natural o grec", "merienda": "1 ració de fruita"}, "lunes": {"cena": "Bròquil (200 g) gratinat amb mozzarella, patata (150 g) i dos ous a la planxa", "comida": "Verdures al forn (200 g: pebre vermell, albergínia, carabassí i porro) amb contracuixa de pollastre (150 g) torrada i patata (150 g)", "desayuno": "Tria una opció:\n1) Llet semidesnatada o beguda vegetal (150 g) + flocs de blat d'indi sense sucre (30 g) + fruita trossejada (100 g) + 20 g de fruits secs torrats\n2) Iogurt natural o grec + flocs de blat d'indi (30 g) + fruits secs (20 g) + fruita\n3) Pa sense gluten (60 g) amb 1 ou i gall d'indi / pernil (>90% carn) / pernil salat / formatge fresc, tomàtiga, oli i sal\n4) Batut: 1 dosi de proteïna + 250 g de llet o beguda vegetal + 40 g de cereals + 100 g de fruita\n+ cafè amb llet sense sucre o tallat\n(Si entrenes en dejú, fes-lo després d'entrenar)", "media": "Tria una opció:\n1) 1 fruita amb 20 g de fruits secs (si tens gana, 2 tortites de blat d'indi, arròs o llegums)\n2) 1 ració de fruita amb iogurt natural o grec", "merienda": "1 ració de fruita"}, "martes": {"cena": "Sortida en bici → sopar lliure saludable", "comida": "Arròs blanc (60 g) amb pit de pollastre (150 g) torrat i rodanxes de carabassí torrat (150 g)", "desayuno": "Tria una opció:\n1) Llet semidesnatada o beguda vegetal (150 g) + flocs de blat d'indi sense sucre (30 g) + fruita trossejada (100 g) + 20 g de fruits secs torrats\n2) Iogurt natural o grec + flocs de blat d'indi (30 g) + fruits secs (20 g) + fruita\n3) Pa sense gluten (60 g) amb 1 ou i gall d'indi / pernil (>90% carn) / pernil salat / formatge fresc, tomàtiga, oli i sal\n4) Batut: 1 dosi de proteïna + 250 g de llet o beguda vegetal + 40 g de cereals + 100 g de fruita\n+ cafè amb llet sense sucre o tallat\n(Si entrenes en dejú, fes-lo després d'entrenar)", "media": "Tria una opció:\n1) 1 fruita amb 20 g de fruits secs (si tens gana, 2 tortites de blat d'indi, arròs o llegums)\n2) 1 ració de fruita amb iogurt natural o grec", "merienda": "1 ració de fruita"}, "miercoles": {"cena": "Crema de carabassa i formatge blau (Thermomix) + truita francesa de 2 ous", "comida": "Lasanya amb làmines d'albergínia, salsa de tomàtiga casolana, formatge i pernil dolç (100 g)", "desayuno": "Tria una opció:\n1) Llet semidesnatada o beguda vegetal (150 g) + flocs de blat d'indi sense sucre (30 g) + fruita trossejada (100 g) + 20 g de fruits secs torrats\n2) Iogurt natural o grec + flocs de blat d'indi (30 g) + fruits secs (20 g) + fruita\n3) Pa sense gluten (60 g) amb 1 ou i gall d'indi / pernil (>90% carn) / pernil salat / formatge fresc, tomàtiga, oli i sal\n4) Batut: 1 dosi de proteïna + 250 g de llet o beguda vegetal + 40 g de cereals + 100 g de fruita\n+ cafè amb llet sense sucre o tallat\n(Si entrenes en dejú, fes-lo després d'entrenar)", "media": "Tria una opció:\n1) 1 fruita amb 20 g de fruits secs (si tens gana, 2 tortites de blat d'indi, arròs o llegums)\n2) 1 ració de fruita amb iogurt natural o grec", "merienda": "1 ració de fruita"}, "nota": "Menú de la Lida Grimalt (12/11/2026). Tot ha de ser sense gluten.\nOli d'oliva verge extra: 1 cullerada al dinar (10 g) i ½ al sopar (5 g).\nPostres, si cal: una fruita o un iogurt natural o grec. Menjar 2-3 peces de fruita al dia.\nEls pesos són en cru, excepte els llegums.", "sabado": {"cena": "Bistec de vedella (120 g) amb moniato (200 g) i verdures al micro (colflori, bròquil i pastanaga)", "comida": "Lluç (150 g) en salsa verda i patata (200 g) i amanida de canonges i ruca", "desayuno": "Tria una opció:\n1) Iogurt natural amb cereals de blat d'indi (30 g), plàtan, poma o kiwi i un poquet de mel\n2) Pa sense gluten (60 g) amb 1 ou i gall d'indi / pernil dolç, oli i sal (o versió dolça amb mantega i melmelada)\n+ cafè amb llet sense sucre o tallat", "media": "Sortida en bici? Menjar cada 45' i beure cada 20' (2 dàtils o orellanes, plàtan, o mitja llesca de pa sense gluten amb codonyat o melmelada)", "merienda": "1 ració de fruita"}, "viernes": {"cena": "Noodles d'arròs (60 g) saltejats amb daus de gall d'indi (150 g) i bròquil (100 g)", "comida": "Mongeta blanca en conserva (200 g) a l'airfryer o fregida amb poc oli i llom de porc (150 g) torrat + enciam trempat", "desayuno": "Tria una opció:\n1) Llet semidesnatada o beguda vegetal (150 g) + flocs de blat d'indi sense sucre (30 g) + fruita trossejada (100 g) + 20 g de fruits secs torrats\n2) Iogurt natural o grec + flocs de blat d'indi (30 g) + fruits secs (20 g) + fruita\n3) Pa sense gluten (60 g) amb 1 ou i gall d'indi / pernil (>90% carn) / pernil salat / formatge fresc, tomàtiga, oli i sal\n4) Batut: 1 dosi de proteïna + 250 g de llet o beguda vegetal + 40 g de cereals + 100 g de fruita\n+ cafè amb llet sense sucre o tallat\n(Si entrenes en dejú, fes-lo després d'entrenar)", "media": "Tria una opció:\n1) 1 fruita amb 20 g de fruits secs (si tens gana, 2 tortites de blat d'indi, arròs o llegums)\n2) 1 ració de fruita amb iogurt natural o grec", "merienda": "1 ració de fruita"}};
-  function menuIsOriginal() {
-    const m = state.menu || {};
-    return DAYS.every(([k]) => MEALS.every(([mk]) => mealText(k, mk) === ((ORIGINAL_MENU[k] || {})[mk] || ""))) && (m.nota || "") === (ORIGINAL_MENU.nota || "");
+  function menuBase(wk) {
+    if (state.repoMenus[wk]) return { m: state.repoMenus[wk], label: "Torna al menú original d'aquesta setmana" };
+    if (!datedWeeks().some(k => k < wk)) return { m: ORIGINAL_MENU, label: "Torna al menú original de la Lida" };
+    return null;
   }
-  function restoreMenu() { writeMenu(JSON.parse(JSON.stringify(ORIGINAL_MENU)), "Menú original restaurat"); }
+  function sameMenu(a, b) {
+    a = a || {}; b = b || {};
+    return DAYS.every(([k]) => MEALS.every(([mk]) => mealText(k, mk, a) === mealText(k, mk, b))) && (a.nota || "") === (b.nota || "");
+  }
   const menuUndo = [];
   async function undoMenu() {
     const u = menuUndo.pop(); if (!u) return;
-    const ok = await writeMenu(u.patch, "Desfet: " + u.label, true);
+    state.menuWeek = u.wk === curWeek() ? null : u.wk;
+    if (u.del) {
+      const own = state.menus[u.wk];
+      delete state.menus[u.wk]; render();
+      try { await state.db.doc("menu/" + u.wk).delete(); toast("Desfet: " + u.label); }
+      catch (e) { state.menus[u.wk] = own; menuUndo.push(u); render(); toast(errText(e)); }
+      return;
+    }
+    const ok = await writeMenu(u.patch, "Desfet: " + u.label, true, u.wk);
     if (!ok) menuUndo.push(u);
   }
-  async function writeMenu(patch, okMsg, isUndo) {
-    const ref = state.db.doc("menu/semana");
-    const before = state.menu;
+  async function writeMenu(patch, okMsg, isUndo, wkArg) {
+    const wk = wkArg || viewWeek();
+    const ref = state.db.doc("menu/" + wk);
+    const own = state.menus[wk];
+    const label = (okMsg || "canvi").toLowerCase();
     if (!isUndo) {
-      const inv = {};
-      for (const k in patch) {
-        if (patch[k] && typeof patch[k] === "object") { inv[k] = {}; for (const mk in patch[k]) inv[k][mk] = mealText(k, mk); }
-        else inv[k] = before && k in before ? before[k] : "";
+      if (!own) menuUndo.push({ wk, del: true, label });
+      else {
+        const inv = {};
+        for (const k in patch) {
+          if (patch[k] && typeof patch[k] === "object") { inv[k] = {}; for (const mk in patch[k]) inv[k][mk] = (own[k] && own[k][mk]) || ""; }
+          else inv[k] = k in own ? own[k] : "";
+        }
+        menuUndo.push({ wk, patch: inv, label });
       }
-      menuUndo.push({ patch: inv, label: (okMsg || "canvi").toLowerCase() });
       if (menuUndo.length > 30) menuUndo.shift();
     }
-    const next = JSON.parse(JSON.stringify(state.menu || {}));
+    const next = JSON.parse(JSON.stringify(own || menuFor(wk).m || {}));
+    delete next.updatedAt;
     for (const k in patch) { if (patch[k] && typeof patch[k] === "object") next[k] = { ...(next[k] || {}), ...patch[k] }; else next[k] = patch[k]; }
-    state.menu = next; render();
+    state.menus[wk] = next; render();
     try {
-      const full = {}; for (const k in patch) full[k] = next[k];
-      if (before) await ref.update({ ...full, updatedAt: Date.now() });
-      else await ref.set({ ...full, updatedAt: Date.now() });
+      if (own) { const full = {}; for (const k in patch) full[k] = next[k]; await ref.update({ ...full, updatedAt: Date.now() }); }
+      else await ref.set({ ...next, updatedAt: Date.now() });
       if (okMsg) toast(okMsg);
       return true;
-    } catch (e) { if (!isUndo) menuUndo.pop(); state.menu = before; render(); toast(errText(e)); return false; }
+    } catch (e) { if (!isUndo) menuUndo.pop(); if (own) state.menus[wk] = own; else delete state.menus[wk]; render(); toast(errText(e)); return false; }
   }
   function swapMeals(a, b) {
     const va = mealText(a.day, a.meal), vb = mealText(b.day, b.meal);
@@ -894,7 +935,7 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
     let feines = tOpen ? tOpen + (tOpen === 1 ? " feina per avui" : " feines per avui") : "Res per fer avui";
     const left = state.shop.filter(i => !i.done).length;
     let compra = left ? left + (left === 1 ? " cosa per comprar" : " coses per comprar") : "Llista buida";
-    const d = state.menu && state.menu[todayKey()];
+    const d = (menuFor(curWeek()).m || {})[todayKey()];
     const hoy = d && (d.comida || d.cena);
     let menu = hoy ? "Avui: " + str(hoy, 80) : "Sense menú per avui";
     if (!state.loaded.entries) { agenda = "Carregant…"; feines = "Carregant…"; }
@@ -919,7 +960,7 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
     const t = todayStr();
     const events = state.entries.filter(e => e.kind === "evento" && occursOn(e, t)).sort(byWhen);
     const tasks = state.entries.filter(e => e.kind === "tarea" && ((!e.done && (!e.date || e.date <= t)) || (e.done && e.date === t))).sort((a, b) => (a.done - b.done) || byWhen(a, b));
-    const d = (state.menu && state.menu[todayKey()]) || {};
+    const d = (menuFor(curWeek()).m || {})[todayKey()] || {};
     const shop = state.shop.filter(i => !i.done);
     return { events, tasks, meals: d, shop };
   }
@@ -1731,10 +1772,19 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
       if (!snap.metadata.fromCache || snap.size) state.loaded.shop = true;
       doneLoading(); refresh();
     }, onErr);
-    db.doc("menu/semana").onSnapshot((snap) => {
-      const d = snap.exists ? snap.data() : null;
-      state.menu = d && typeof d === "object" ? d : null;
-      if (!snap.metadata.fromCache || snap.exists) state.loaded.menu = true;
+    (async () => {
+      try {
+        const r = await fetch("menus/index.json?t=" + Date.now(), { cache: "no-store" }); if (!r.ok) return;
+        const list = await r.json(); const got = {};
+        await Promise.all((Array.isArray(list) ? list : []).filter(k => WK_RE.test(k)).map(async (k) => { try { const x = await fetch("menus/" + k + ".json?t=" + Date.now(), { cache: "no-store" }); if (x.ok) got[k] = await x.json(); } catch (e) {} }));
+        state.repoMenus = got; refresh();
+      } catch (e) {}
+    })();
+    db.collection("menu").onSnapshot((snap) => {
+      const all = {};
+      snap.docs.forEach((d) => { const v = d.data(); if (v && typeof v === "object") all[d.id] = v; });
+      state.menus = all;
+      if (!snap.metadata.fromCache || snap.size) state.loaded.menu = true;
       doneLoading(); refresh();
     }, onErr);
     db.doc("settings/family").onSnapshot((snap) => {
