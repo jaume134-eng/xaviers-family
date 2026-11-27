@@ -72,7 +72,7 @@ header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; b
 .icon-btn { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; width: 40px; height: 40px; display: grid; place-items: center; flex: none; }
 .icon-btn svg { width: 20px; height: 20px; }
 
-.tabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; background: var(--surface-2); border-radius: 12px; padding: 4px; margin-top: 12px; }
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: var(--surface-2); border-radius: 12px; padding: 4px; margin-top: 12px; }
 .tabs button { border: 0; background: transparent; border-radius: 9px; padding: 8px 4px; font-weight: 600; color: var(--muted); }
 .tabs button[aria-selected="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 .tabs .count { font-variant-numeric: tabular-nums; font-weight: 500; opacity: .8; }
@@ -118,6 +118,10 @@ main { padding-block: 8px 110px; }
 
 /* Mes */
 .month-nav { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+.wk-day { margin-top: 14px; }
+.wk-day .day-head { margin-bottom: 6px; }
+.wk-empty { width: 100%; text-align: left; border: 1px dashed var(--line); background: transparent; color: var(--muted); border-radius: var(--radius); padding: 10px 14px; font: inherit; font-size: .9rem; cursor: pointer; }
+.wk-today-btn { border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 999px; padding: 4px 12px; font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; }
 .month-nav h2 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 1.2rem; }
 .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 10px; }
 .grid .dow { text-align: center; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; padding-bottom: 2px; }
@@ -308,6 +312,7 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
     <div id="agendaBar">
       <div class="tabs" role="tablist" id="agTabs">
         <button role="tab" id="tab-agenda" aria-selected="true" data-view="agenda">Properament</button>
+        <button role="tab" id="tab-setmana" aria-selected="false" data-view="setmana">Setmana</button>
         <button role="tab" id="tab-mes" aria-selected="false" data-view="mes">Mes</button>
       </div>
       <div class="filters" id="filters" aria-label="Filtra per persona"></div>
@@ -344,15 +349,15 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
 <input type="file" id="photoInput" accept="image/*" multiple class="vh" tabindex="-1" aria-hidden="true">
 <div class="viewer" id="viewer" hidden></div>
 
-<script>window.XF_CONFIG = {"version": "5", "clientId": "81552258273-rj053ci47avd7a8j75hl3uogbg711184.apps.googleusercontent.com", "folderId": "1bnokMvQ8ofoV3mgSsR-StzbCubecYl00", "sheetTitle": "Xavier's family \u00b7 dades", "sheetId": "1kmVDrEAd_LtLubBjFgcpcUkGYVKVdy-bkknkYEmCuJU"};</script>
-<script src="shim.js?v=5"></script>
+<script>window.XF_CONFIG = {"version": "6", "clientId": "81552258273-rj053ci47avd7a8j75hl3uogbg711184.apps.googleusercontent.com", "folderId": "1bnokMvQ8ofoV3mgSsR-StzbCubecYl00", "sheetTitle": "Xavier's family \u00b7 dades", "sheetId": "1kmVDrEAd_LtLubBjFgcpcUkGYVKVdy-bkknkYEmCuJU"};</script>
+<script src="shim.js?v=6"></script>
 <script>
 (function () {
   "use strict";
   const PEOPLE = ["papa", "mama", "juntos", "xavier"];
   const DEFAULT_NAMES = { papa: "Papa", mama: "Mama", juntos: "Junts", xavier: "Xavier" };
   const SECTIONS = ["inicio", "avui", "agenda", "feines", "compra", "menu", "fotos"];
-  const AG_VIEWS = ["agenda", "mes"];
+  const AG_VIEWS = ["agenda", "setmana", "mes"];
   const DAYS = [["lunes", "Dilluns"], ["martes", "Dimarts"], ["miercoles", "Dimecres"], ["jueves", "Dijous"], ["viernes", "Divendres"], ["sabado", "Dissabte"], ["domingo", "Diumenge"]];
   const MEALS = [["comida", "Dinar"], ["cena", "Sopar"]];
   const UNITS = ["ud", "g", "kg", "ml", "l", "paquete", "docena", "lata", "bote"];
@@ -488,6 +493,7 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
   function renderAgenda(main) {
     const ok = state.loaded.cal && state.cal.status === "ok";
     if (state.view === "mes") return renderMonth(main);
+    if (state.view === "setmana") return renderWeek(main);
     const t = todayStr();
     const dated = visible().filter(e => e.date && e.kind === "evento").sort(byWhen);
     const upcoming = dated.filter(e => e.date >= t);
@@ -497,6 +503,35 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
     if (past.length) {
       main.append(el("div", { style: "margin-top:22px" }, el("button", { type: "button", class: "btn", onclick: () => { state.showPast = !state.showPast; render(); } }, state.showPast ? "Amaga el que ha passat" : "Mostra el que ha passat (" + past.length + ")")));
       if (state.showPast) groupByDay(past.reverse(), main);
+    }
+  }
+  function renderWeek(main) {
+    const now = new Date();
+    if (!state.weekStart) state.weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
+    const ws = state.weekStart;
+    const end = new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + 6);
+    ensureMonth(new Date(ws.getFullYear(), ws.getMonth(), 1)); ensureMonth(new Date(end.getFullYear(), end.getMonth(), 1));
+    const move = (n) => { state.weekStart = new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + n); render(); };
+    const label = ws.getMonth() === end.getMonth() ? ws.getDate() + " – " + fmtShort.format(end) : fmtShort.format(ws) + " – " + fmtShort.format(end);
+    const t = todayStr();
+    const isThis = ymd(ws) <= t && t <= ymd(end);
+    main.append(el("div", { class: "month-nav" },
+      el("button", { type: "button", class: "icon-btn", "aria-label": "Setmana anterior", onclick: () => move(-7) }, "‹"),
+      el("div", { style: "display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center" }, el("h2", { text: label }), isThis ? null : el("button", { type: "button", class: "wk-today-btn", onclick: () => { state.weekStart = null; render(); } }, "Avui")),
+      el("button", { type: "button", class: "icon-btn", "aria-label": "Setmana següent", onclick: () => move(7) }, "›")));
+    const byDate = new Map();
+    for (const e of visible()) if (e.date && e.kind === "evento") { if (!byDate.has(e.date)) byDate.set(e.date, []); byDate.get(e.date).push(e); }
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + i); const k = ymd(d);
+      const rel = relLabel(k);
+      const sec = el("section", { class: "wk-day" }, el("div", { class: "day-head" + (k === t ? " is-today" : "") }, el("h2", { text: fmtDay.format(d) }), rel ? el("span", { class: "rel", text: rel }) : null));
+      const items = (byDate.get(k) || []).sort(byWhen);
+      const l = el("div", { class: "list" });
+      if (items.length) items.forEach(e => l.append(itemNode(e)));
+      else l.append(state.canWrite && state.cal.status === "ok"
+        ? el("button", { type: "button", class: "wk-empty", onclick: () => { const prev = [state.view, state.selDay]; state.view = "mes"; state.selDay = k; openEntrySheet(null); [state.view, state.selDay] = prev; } }, "Res apuntat · toca per afegir")
+        : el("div", { class: "wk-empty", style: "cursor:default", text: "Res apuntat" }));
+      sec.append(l); main.append(sec);
     }
   }
   function renderMonth(main) {
