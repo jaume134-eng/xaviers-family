@@ -129,6 +129,9 @@ main { padding-block: 8px 110px; }
 .cell.out { background: transparent; color: var(--muted); opacity: .5; }
 .cell.today .n { background: var(--accent); color: var(--on-accent); border-radius: 999px; padding: 0 6px; }
 .cell[aria-pressed="true"] { border-color: var(--fg); }
+.cell.in-range { background: color-mix(in srgb, var(--juntos) 22%, var(--surface)); border-color: var(--juntos); }
+.grid.ranging { touch-action: none; user-select: none; -webkit-user-select: none; }
+.grid .cell { -webkit-touch-callout: none; }
 .cell .dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; max-width: 30px; }
 .cell .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
 .sel-day { margin-top: 18px; }
@@ -354,8 +357,8 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
 <input type="file" id="photoInput" accept="image/*" multiple class="vh" tabindex="-1" aria-hidden="true">
 <div class="viewer" id="viewer" hidden></div>
 
-<script>window.XF_CONFIG = {"version": "7", "clientId": "81552258273-rj053ci47avd7a8j75hl3uogbg711184.apps.googleusercontent.com", "folderId": "1bnokMvQ8ofoV3mgSsR-StzbCubecYl00", "sheetTitle": "Xavier's family \u00b7 dades", "sheetId": "1kmVDrEAd_LtLubBjFgcpcUkGYVKVdy-bkknkYEmCuJU"};</script>
-<script src="shim.js?v=7"></script>
+<script>window.XF_CONFIG = {"version": "8", "clientId": "81552258273-rj053ci47avd7a8j75hl3uogbg711184.apps.googleusercontent.com", "folderId": "1bnokMvQ8ofoV3mgSsR-StzbCubecYl00", "sheetTitle": "Xavier's family \u00b7 dades", "sheetId": "1kmVDrEAd_LtLubBjFgcpcUkGYVKVdy-bkknkYEmCuJU"};</script>
+<script src="shim.js?v=8"></script>
 <script>
 (function () {
   "use strict";
@@ -471,7 +474,7 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
   // ---------- Agenda ----------
   function itemNode(e, opts) {
     opts = opts || {};
-    const meta = el("div", { class: "meta" }, el("span", { class: "who", text: state.names[e.who] }), e.recurringId ? el("span", { class: "rep-ic", title: "Es repeteix", text: "↻ Cada setmana" }) : null);
+    const meta = el("div", { class: "meta" }, el("span", { class: "who", text: state.names[e.who] }), e.recurringId ? el("span", { class: "rep-ic", title: "Es repeteix", text: "↻ Cada setmana" }) : null, e.endDate && e.kind === "evento" ? el("span", { text: rangeText(e) }) : null);
     if (opts.showDate && e.date) meta.append(el("span", { text: fmtShort.format(parse(e.date)) + (relLabel(e.date) ? " · " + relLabel(e.date) : "") }));
     if (e.kind === "tarea" && !opts.showDate && state.section !== "feines") meta.append(el("span", { text: "Feina" }));
     const body = el("button", { type: "button", class: "item-open", "aria-label": "Edita " + e.title, onclick: () => openEntrySheet(e) },
@@ -485,9 +488,13 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
   function emptyAgenda(text) {
     return el("div", { class: "notice" }, dotsArt(), el("strong", { text: text }), document.createTextNode(" Prem «Afegir» per apuntar un esdeveniment, i tria si és del " + state.names.papa + ", de la " + state.names.mama + ", de tots dos o del " + state.names.xavier + "."));
   }
+  function lastDay(e) { return e.endDate && e.endDate > e.date ? e.endDate : e.date; }
+  function occursOn(e, d) { return !!e.date && e.date <= d && d <= lastDay(e); }
+  function spanDays(e) { const out = [e.date]; let d = e.date; const end = lastDay(e); for (let i = 0; i < 62 && d < end; i++) { d = addDays(d, 1); out.push(d); } return out; }
+  function rangeText(e) { return fmtShort.format(parse(e.date)) + " – " + fmtShort.format(parse(e.endDate)); }
   function groupByDay(list, container) {
-    const days = new Map();
-    for (const e of list) { if (!days.has(e.date)) days.set(e.date, []); days.get(e.date).push(e); }
+    const days = new Map(); const t0 = todayStr();
+    for (const e of list) { const k = e.date < t0 && lastDay(e) >= t0 ? t0 : e.date; if (!days.has(k)) days.set(k, []); days.get(k).push(e); }
     for (const [d, items] of days) {
       const rel = relLabel(d);
       const head = el("div", { class: "day-head" + (d === todayStr() ? " is-today" : "") }, el("h2", { text: fmtDay.format(parse(d)) }), rel ? el("span", { class: "rel", text: rel }) : null);
@@ -501,8 +508,8 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
     if (state.view === "setmana") return renderWeek(main);
     const t = todayStr();
     const dated = visible().filter(e => e.date && e.kind === "evento").sort(byWhen);
-    const upcoming = dated.filter(e => e.date >= t);
-    const past = dated.filter(e => e.date < t);
+    const upcoming = dated.filter(e => lastDay(e) >= t);
+    const past = dated.filter(e => lastDay(e) < t);
     if (!upcoming.length && ok) main.append(emptyAgenda(dated.length ? "No hi ha res properament." : "Encara no hi ha res apuntat."));
     groupByDay(upcoming, main);
     if (past.length) {
@@ -525,7 +532,7 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
       el("div", { style: "display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center" }, el("h2", { text: label }), isThis ? null : el("button", { type: "button", class: "wk-today-btn", onclick: () => { state.weekStart = null; render(); } }, "Avui")),
       el("button", { type: "button", class: "icon-btn", "aria-label": "Setmana següent", onclick: () => move(7) }, "›")));
     const byDate = new Map();
-    for (const e of visible()) if (e.date && e.kind === "evento") { if (!byDate.has(e.date)) byDate.set(e.date, []); byDate.get(e.date).push(e); }
+    for (const e of visible()) if (e.date && e.kind === "evento") for (const k of spanDays(e)) { if (!byDate.has(k)) byDate.set(k, []); byDate.get(k).push(e); }
     for (let i = 0; i < 7; i++) {
       const d = new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + i); const k = ymd(d);
       const rel = relLabel(k);
@@ -538,6 +545,32 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
         : el("div", { class: "wk-empty", style: "cursor:default", text: "Res apuntat" }));
       sec.append(l); main.append(sec);
     }
+  }
+  let rangeDrag = null;
+  function attachRangeDrag(grid) {
+    const cells = () => [...grid.querySelectorAll(".cell[data-day]")];
+    const mark = () => { if (!rangeDrag) return; const [a, b] = [rangeDrag.from, rangeDrag.to].sort(); cells().forEach(c => c.classList.toggle("in-range", c.dataset.day >= a && c.dataset.day <= b)); };
+    const cellAt = (x, y) => { const n = document.elementFromPoint(x, y); return n && n.closest ? n.closest(".cell[data-day]") : null; };
+    grid.addEventListener("pointerdown", (ev) => {
+      const c = ev.target.closest(".cell[data-day]"); if (!c) return;
+      const st = { x: ev.clientX, y: ev.clientY, id: ev.pointerId, from: c.dataset.day, to: c.dataset.day, on: false };
+      st.timer = setTimeout(() => { st.on = true; rangeDrag = st; drag = st; try { grid.setPointerCapture(st.id); } catch (e) {} grid.classList.add("ranging"); if (navigator.vibrate) navigator.vibrate(15); mark(); }, 350);
+      const move = (e2) => {
+        if (e2.pointerId !== st.id) return;
+        if (!st.on) { if (Math.hypot(e2.clientX - st.x, e2.clientY - st.y) > 8) cleanup(); return; }
+        const c2 = cellAt(e2.clientX, e2.clientY); if (c2 && c2.dataset.day !== st.to) { st.to = c2.dataset.day; mark(); }
+      };
+      const up = (e2) => {
+        if (e2.pointerId !== st.id) return;
+        const was = st.on; const [a, b] = [st.from, st.to].sort(); cleanup();
+        if (was) { st.swallow = true; state.selDay = a; openEntrySheet(null); if (sheet && sheet.data) { sheet.data.date = a; sheet.data.endDate = b > a ? b : ""; sheet.draw(); } }
+      };
+      const tm = (e2) => { if (st.on) e2.preventDefault(); };
+      const cleanup = () => { clearTimeout(st.timer); grid.removeEventListener("pointermove", move); grid.removeEventListener("pointerup", up); grid.removeEventListener("pointercancel", up); grid.removeEventListener("touchmove", tm); grid.classList.remove("ranging"); cells().forEach(x => x.classList.remove("in-range")); if (rangeDrag === st) rangeDrag = null; if (drag === st) drag = null; if (st.on) { const sw = (e3) => { e3.stopPropagation(); e3.preventDefault(); }; grid.addEventListener("click", sw, { capture: true, once: true }); setTimeout(() => grid.removeEventListener("click", sw, { capture: true }), 400); } };
+      grid.addEventListener("pointermove", move); grid.addEventListener("pointerup", up); grid.addEventListener("pointercancel", up);
+      grid.addEventListener("touchmove", tm, { passive: false });
+    });
+    grid.addEventListener("contextmenu", (e) => { if (rangeDrag) e.preventDefault(); });
   }
   function renderMonth(main) {
     if (!state.month) { const n = new Date(); state.month = new Date(n.getFullYear(), n.getMonth(), 1); }
@@ -552,7 +585,7 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
     ["Dl", "Dt", "Dc", "Dj", "Dv", "Ds", "Dg"].forEach(d => grid.append(el("div", { class: "dow", text: d })));
     const start = new Date(m.getFullYear(), m.getMonth(), 1 - ((m.getDay() + 6) % 7));
     const byDate = new Map();
-    for (const e of visible()) if (e.date) { if (!byDate.has(e.date)) byDate.set(e.date, []); byDate.get(e.date).push(e); }
+    for (const e of visible()) if (e.date) for (const k of (e.kind === "evento" ? spanDays(e) : [e.date])) { if (!byDate.has(k)) byDate.set(k, []); byDate.get(k).push(e); }
     const t = todayStr();
     for (let i = 0; i < 42; i++) {
       const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
@@ -561,11 +594,15 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
       const dots = el("span", { class: "dots" });
       (byDate.get(k) || []).sort(byWhen).slice(0, 6).forEach(e => dots.append(el("i", { class: "p-" + e.who })));
       const n = (byDate.get(k) || []).length;
-      grid.append(el("button", { type: "button", class: "cell" + (d.getMonth() !== m.getMonth() ? " out" : "") + (k === t ? " today" : ""), "aria-pressed": String(k === state.selDay),
+      grid.append(el("button", { type: "button", "data-day": k, class: "cell" + (d.getMonth() !== m.getMonth() ? " out" : "") + (k === t ? " today" : ""), "aria-pressed": String(k === state.selDay),
         "aria-label": fmtDay.format(d) + (n ? ", " + n + (n === 1 ? " cosa" : " coses") : ""), onclick: () => { state.selDay = k; if (d.getMonth() !== m.getMonth()) state.month = new Date(d.getFullYear(), d.getMonth(), 1); render(); } },
         el("span", { class: "n", text: String(d.getDate()) }), dots));
     }
     main.append(grid);
+    if (state.canWrite && state.cal.status === "ok") {
+      attachRangeDrag(grid);
+      main.append(el("p", { class: "week-hint", style: "margin-top:8px", text: "Per apuntar un viatge o una cosa de diversos dies: mantén premut el primer dia i arrossega fins a l'últim." }));
+    }
     const sel = el("section", { class: "sel-day" });
     const rel = relLabel(state.selDay);
     sel.append(el("div", { class: "day-head" }, el("h2", { text: fmtDay.format(parse(state.selDay)) }), rel ? el("span", { class: "rel", text: rel }) : null));
@@ -813,8 +850,8 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
   }
   function homeSubs() {
     const t = todayStr();
-    const todayItems = state.entries.filter(e => e.date === t && e.kind === "evento").sort(byWhen);
-    const next = state.entries.filter(e => e.date && e.date >= t && e.kind === "evento").sort(byWhen)[0];
+    const todayItems = state.entries.filter(e => e.kind === "evento" && occursOn(e, t)).sort(byWhen);
+    const next = state.entries.filter(e => e.date && lastDay(e) >= t && e.kind === "evento").sort(byWhen)[0];
     let agenda = "Res apuntat";
     if (todayItems.length) agenda = "Avui: " + todayItems.length + (todayItems.length === 1 ? " cosa" : " coses");
     else if (next) agenda = "Properament: " + next.title + " · " + (relLabel(next.date) || fmtShort.format(parse(next.date)));
@@ -845,7 +882,7 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
   }
   function avuiParts() {
     const t = todayStr();
-    const events = state.entries.filter(e => e.date === t && e.kind === "evento").sort(byWhen);
+    const events = state.entries.filter(e => e.kind === "evento" && occursOn(e, t)).sort(byWhen);
     const tasks = state.entries.filter(e => e.kind === "tarea" && ((!e.done && (!e.date || e.date <= t)) || (e.done && e.date === t))).sort((a, b) => (a.done - b.done) || byWhen(a, b));
     const d = (state.menu && state.menu[todayKey()]) || {};
     const shop = state.shop.filter(i => !i.done);
@@ -948,7 +985,7 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
     const s = entry ? { ...entry } : { id: null, title: "", kind: state.section === "feines" ? "tarea" : "evento", who: defWho, date: defDate, time: "", notes: "", done: false, createdAt: 0 };
     if (s.rep === undefined) { s.rep = false; s.repDays = []; s.repUntil = ""; s.scope = "one"; }
     sheet = { type: "entry", data: s, isNew, confirmDelete: false,
-      sync() { s.title = fieldVal("f-title"); s.date = fieldVal("f-date"); s.time = fieldVal("f-time"); s.notes = fieldVal("f-notes"); const u = document.getElementById("f-until"); if (u) s.repUntil = u.value; },
+      sync() { s.title = fieldVal("f-title"); s.date = fieldVal("f-date"); s.time = fieldVal("f-time"); s.notes = fieldVal("f-notes"); const fe = document.getElementById("f-end"); if (fe) s.endDate = fe.value; const u = document.getElementById("f-until"); if (u) s.repUntil = u.value; },
       draw(err) {
         const form = $("#sheet"); form.replaceChildren(); const ro = !state.canWrite;
         form.append(el("h3", { text: isNew ? (s.kind === "tarea" ? "Nova feina" : "Nou esdeveniment") : (ro ? "Detall" : "Editar") }));
@@ -964,6 +1001,7 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
         form.append(el("div", { class: "row2" },
           el("div", { class: "field" }, el("label", { for: "f-date", text: s.kind === "evento" ? "Dia" : "Per a quin dia" }), el("input", { id: "f-date", type: "date", value: s.date, disabled: ro })),
           el("div", { class: "field" }, el("label", { for: "f-time", text: "Hora (opcional)" }), el("input", { id: "f-time", type: "time", value: s.time, disabled: ro }))));
+        if (s.kind === "evento" && !s.rep && !s.recurringId) form.append(el("div", { class: "field" }, el("label", { for: "f-end", text: "Fins al dia (opcional, per a viatges o coses de diversos dies)" }), el("input", { id: "f-end", type: "date", value: s.endDate || "", min: s.date || "", disabled: ro })));
         if (s.kind === "evento" && !ro) {
           if (s.recurringId) {
             const sc = el("div", { class: "seg" });
@@ -998,9 +1036,10 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
         const title = s.title.trim();
         if (!title) return sheet.draw("Escriu què és, per exemple «Aniversari de l'àvia».");
         if (s.kind === "evento" && !validDate(s.date)) return sheet.draw("Un esdeveniment necessita un dia. Si no té data, marca'l com a «Feina».");
+        if (s.kind === "evento" && s.endDate && validDate(s.endDate) && s.endDate < s.date) return sheet.draw("El dia final ha de ser el mateix o després del primer dia.");
         if (s.kind === "evento" && s.rep && !s.recurringId && !s.repDays.length) return sheet.draw("Marca quins dies de la setmana es repeteix.");
         if (s.kind === "evento" && s.rep && s.repUntil && validDate(s.repUntil) && s.repUntil < s.date) return sheet.draw("La data «Fins a» ha de ser després del primer dia.");
-        const body = { title, kind: s.kind, who: s.who, date: validDate(s.date) ? s.date : "", time: validTime(s.time) ? s.time : "", notes: s.notes.trim(), done: s.kind === "tarea" ? s.done : false, createdAt: s.createdAt || Date.now(), updatedAt: Date.now() };
+        const body = { title, kind: s.kind, who: s.who, date: validDate(s.date) ? s.date : "", endDate: s.kind === "evento" && !s.rep && validDate(s.endDate || "") && s.endDate > s.date ? s.endDate : "", time: validTime(s.time) ? s.time : "", notes: s.notes.trim(), done: s.kind === "tarea" ? s.done : false, createdAt: s.createdAt || Date.now(), updatedAt: Date.now() };
         if (s.kind === "tarea") {
           if (s.src === "gcal") { const btn = $("#saveBtn"); if (btn) btn.disabled = true; try { await state.db.collection("entries").doc().set(body); await calCall("delete_event", { calendarId: CAL_ID, eventId: s.id, notificationLevel: "NONE" }); calDropLocal(s.id); closeSheet(); toast("Passat a Feines"); } catch (e) { handleCalErr(e); } return; }
           await writeDoc("entries", s.id, body, isNew ? "Apuntat" : "Canvis desats");
@@ -1189,14 +1228,19 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
   function cleanEvent(ev) {
     if (!ev || typeof ev !== "object" || ev.status === "cancelled" || typeof ev.id !== "string") return null;
     const st = ev.start || {}, en = ev.end || {};
-    let date = "", time = "", durMin = 60, allDay = false;
-    if (typeof st.date === "string" && validDate(st.date)) { date = st.date; allDay = true; }
+    let date = "", time = "", durMin = 60, allDay = false, endDate = "", endClock = "";
+    if (typeof st.date === "string" && validDate(st.date)) {
+      date = st.date; allDay = true;
+      if (typeof en.date === "string" && validDate(en.date)) { const last = addDays(en.date, -1); if (last > date) endDate = last; }
+    }
     else if (typeof st.dateTime === "string") {
       const a = madridParts(st.dateTime); if (!a) return null; date = a.date; time = a.time;
       const ms = new Date(en.dateTime) - new Date(st.dateTime); if (ms > 0 && ms < 7 * 86400000) durMin = Math.round(ms / 60000);
+      const b = typeof en.dateTime === "string" ? madridParts(en.dateTime) : null;
+      if (b) { endClock = b.time; let ld = b.date; if (b.time === "00:00" && ld > date) ld = addDays(ld, -1); if (ld > date) endDate = ld; }
     } else return null;
     return { id: ev.id, src: "gcal", title: str(ev.summary, 200) || "(sense títol)", kind: "evento", who: WHO_OF_COLOR[ev.colorId] || "juntos",
-      date, time, notes: plainText(ev.description), done: false, durMin, allDay, createdAt: 0, recurringId: typeof ev.recurringEventId === "string" ? ev.recurringEventId : "" };
+      date, endDate, endClock, time, notes: plainText(ev.description), done: false, durMin, allDay, createdAt: 0, recurringId: typeof ev.recurringEventId === "string" ? ev.recurringEventId : "" };
   }
   function rebuildEntries() {
     const byId = new Map();
@@ -1294,6 +1338,10 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
     const input = { calendarId: CAL_ID, summary: body.title, description: body.notes || "", colorId: COLOR_OF[body.who], timeZone: CAL_TZ, notificationLevel: "NONE" };
     if (timed) { input.startTime = body.date + "T" + body.time + ":00"; input.endTime = endOf(body.date, body.time, s.src === "gcal" && !s.allDay ? (s.durMin || 60) : 60); input.allDay = false; }
     else { input.startTime = body.date + "T00:00:00"; input.endTime = addDays(body.date, 1) + "T00:00:00"; input.allDay = true; }
+    if (body.endDate) {
+      if (timed) { const ec = s.endDate === body.endDate && s.endClock && s.src === "gcal" ? s.endClock : (endOf(body.date, body.time, 60).slice(11, 16)); input.endTime = body.endDate + "T" + ec + ":00"; }
+      else input.endTime = addDays(body.endDate, 1) + "T00:00:00";
+    }
     const btn = $("#saveBtn"); if (btn) btn.disabled = true;
     const isUpdate = s.src === "gcal" && s.id;
     if (isUpdate && s.recurringId && s.scope === "all") {
@@ -1323,7 +1371,7 @@ body.is-dragging { user-select: none; -webkit-user-select: none; }
       if (s.src === "db" && s.id) { try { await state.db.collection("entries").doc(s.id).delete(); } catch (e) {} }
       const created = r && r.payload ? cleanEvent(r.payload) : null;
       const local = created || { ...body, id: isUpdate ? s.id : "tmp-" + Date.now(), src: "gcal", kind: "evento", durMin: 60, allDay: !timed };
-      local.who = body.who; local.date = body.date; local.time = timed ? body.time : "";
+      local.who = body.who; local.date = body.date; local.endDate = body.endDate || ""; local.time = timed ? body.time : "";
       state.events = state.events.filter(e => e.id !== local.id).concat([local]); rebuildEntries();
       if (repeating) local.recurringId = local.recurringId || (r && r.payload && r.payload.id) || "rep";
       closeSheet(); toast(isUpdate ? "Canvis desats al calendari" : repeating ? "Desat: es repeteix cada setmana" : "Desat al calendari");
